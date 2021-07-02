@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "@0xcert/ethereum-erc721": "2.0.0",
     "express": "^4.17.1",
     "fs": "^0.0.1-security",
     "solc": "0.4.25",
