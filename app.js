@@ -2,8 +2,6 @@ const express = require("express");
 const fs = require("fs");
 const solc = require("solc");
 const Web3 = require("web3");
-const contract = require("@0xcert/ethereum-erc721/build/nf-token.json");
-const newABI = require("./ABI.json");
 const {
   PORT,
   NETWORK,
@@ -12,7 +10,6 @@ const {
   CONTRACT_ADDRESS,
   ADDRESS,
 } = require("./config.js");
-const { relative } = require("path");
 
 // Start express app
 const app = express();
@@ -23,17 +20,43 @@ const web3 = new Web3(
     `https://${NETWORK}.infura.io/v3/${INFURA_KEY}`
   )
 );
-const abi = contract.NFToken.abi;
-const bytecode = "0x" + contract.NFToken.evm.bytecode.object;
 const LATEST_TOKEN_ID = 2;
+
+const instantiateContract = () => {
+  const sources = {};
+  compileImports("./Base.sol", sources);
+
+  var input = {
+    language: "Solidity",
+    sources: sources,
+    settings: {
+      outputSelection: {
+        "*": {
+          "*": ["*"],
+        },
+      },
+    },
+  };
+
+  const output = solc.compile(JSON.stringify(input));
+  const contract = JSON.parse(output);
+  const bytecode =
+    "0x" + contract.contracts["./Base.sol"]["Base"].evm.bytecode.object;
+  const abi = contract.contracts["./Base.sol"]["Base"].abi;
+  return {
+    bytecode: bytecode,
+    abi: abi,
+  };
+};
 
 const deployContract = () => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
+  const metadata = instantiateContract();
   // Create and deploy contract object
-  const Instance = new web3.eth.Contract(abi);
-  Instance.options.data = bytecode;
+  const Instance = new web3.eth.Contract(metadata.abi);
+  Instance.options.data = metadata.bytecode;
   const deployTx = Instance.deploy();
 
   // NEED TO RETURN so that a promise can be returned to caller
@@ -51,20 +74,11 @@ const deployContract = () => {
     });
 };
 
-//     sources: {
-//       "Append.sol": {
-//         content: solA,
-//       },
 // returns sources: { "Contract.sol": { content: fs.readFileSync("pathName.sol",utf8)...}}
-const compileImports = (root, sources, traversed) => {
-  const fileName = root.substr(root.lastIndexOf("/") + 1);
-  // need to fix root, bc not always relative to this folder
-  // i.e. ERC721's import is specific to
+const compileImports = (root, sources) => {
   sources[root] = { content: fs.readFileSync(root, "utf8") };
   const imports = getNeededImports(root);
-  console.log(sources);
   for (let i = 0; i < imports.length; i++) {
-    console.log(imports[i]);
     compileImports(imports[i], sources);
   }
   // {Base.sol: {content...}}
@@ -87,7 +101,6 @@ const getNeededImports = (path) => {
       // the import is legit
       const relativePath = line.substring(8, line.length - 2);
       const fullPath = buildFullPath(path, relativePath);
-      console.log("Full Path:", fullPath);
       files.push(fullPath);
     });
   return files;
@@ -111,45 +124,7 @@ const buildFullPath = (parent, path) => {
 
 app.get("/", (req, res) => {
   const sources = {};
-  const traversed = [];
-  compileImports("./Base.sol", sources, traversed);
-
-  // console.log(
-  //   buildFullPath(
-  //     "./node_modules/@openzeppelin/contracts/token/ERC721/ERC721.sol",
-  //     "./extensions/IERC721Metadata.sol"
-  //   )
-  // );
-
-  //   const solB = fs.readFileSync("./Base.sol", "utf8");
-  //   const solA = fs.readFileSync("./Append.sol", "utf8");
-  //   const solC = fs.readFileSync(
-  //     "./node_modules/@openzeppelin/contracts/token/ERC721/ERC721.sol",
-  //     "utf8"
-  //   );
-
-  //   var input = {
-  //     language: "Solidity",
-  //     sources: {
-  //       "Append.sol": {
-  //         content: solA,
-  //       },
-  //       "Base.sol": {
-  //         content: solB,
-  //       },
-  //       // need to crawl through the dependencies to ensure that updates OpenZeppelin
-  //       //   "ERC721.sol": {
-  //       //     content: solC,
-  //       //   },
-  //     },
-  //     settings: {
-  //       outputSelection: {
-  //         "*": {
-  //           "*": ["*"],
-  //         },
-  //       },
-  //     },
-  //   };
+  compileImports("./Base.sol", sources);
 
   var input = {
     language: "Solidity",
@@ -165,11 +140,10 @@ app.get("/", (req, res) => {
 
   const output = solc.compile(JSON.stringify(input));
   const contract = JSON.parse(output);
-  console.log(contract);
   //   const bytecode = output.contracts["Token"].bytecode;
   //   const abi = JSON.parse(output.contracts["Token"].interface);
 
-  res.send(contract);
+  res.send(contract.contracts);
 });
 
 // Deploys basic 0xcert/ERC721 contract to NETWORK
@@ -216,9 +190,11 @@ app.get("/mint", (req, res) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
-  const contract = new web3.eth.Contract(newABI, contractAddress);
+  const metadata = instantiateContract();
+  const contract = new web3.eth.Contract(metadata.abi, contractAddress);
+  console.log("Contract", contract);
   contract.methods
-    .mint("0x3b634db3a35da1488aeafb18f1be9108d8408e2c", tokenId)
+    .mint("0x3b634db3a35da1488aeafb18f1be9108d8408e2c", 0)
     // needed to use signer instead of string "0x...", otherwise, result in Error: The method eth_sendTransaction does not exist/is not available
     .send({ from: signer.address, gas: 14237245 })
     .on("transactionHash", function (hash) {
