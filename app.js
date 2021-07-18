@@ -12,6 +12,7 @@ const {
   CONTRACT_ADDRESS,
   ADDRESS,
 } = require("./config.js");
+const { relative } = require("path");
 
 // Start express app
 const app = express();
@@ -55,11 +56,11 @@ const deployContract = () => {
 //         content: solA,
 //       },
 // returns sources: { "Contract.sol": { content: fs.readFileSync("pathName.sol",utf8)...}}
-const compileImports = (root, sources) => {
+const compileImports = (root, sources, traversed) => {
   const fileName = root.substr(root.lastIndexOf("/") + 1);
   // need to fix root, bc not always relative to this folder
   // i.e. ERC721's import is specific to
-  sources[fileName] = { content: fs.readFileSync(root, "utf8") };
+  sources[root] = { content: fs.readFileSync(root, "utf8") };
   const imports = getNeededImports(root);
   console.log(sources);
   for (let i = 0; i < imports.length; i++) {
@@ -83,26 +84,43 @@ const getNeededImports = (path) => {
       ) {
         return;
       }
-      files.push(line.substring(8, line.length - 2));
+      // the import is legit
+      const relativePath = line.substring(8, line.length - 2);
+      const fullPath = buildFullPath(path, relativePath);
+      console.log("Full Path:", fullPath);
+      files.push(fullPath);
     });
   return files;
 };
 
 // parent: node_modules/.../ERC721/ERC721.sol
 // path: ../../etc
-const getFullPath = (parent, path) => {
-  const curDir = parent.substr(0, parent.lastIndexOf("/") - 1); //i.e. ./node/.../ERC721/
-  console.log(curDir);
+const buildFullPath = (parent, path) => {
+  let curDir = parent.substr(0, parent.lastIndexOf("/")); //i.e. ./node/.../ERC721
+  if (path.startsWith("./")) {
+    return curDir + "/" + path.substr(2);
+  }
+
+  while (path.startsWith("../")) {
+    curDir = curDir.substr(0, curDir.lastIndexOf("/"));
+    path = path.substr(3);
+  }
+
+  return curDir + "/" + path;
 };
 
 app.get("/", (req, res) => {
   const sources = {};
-  //   compileImports("./Base.sol", sources);
+  const traversed = [];
+  compileImports("./Base.sol", sources, traversed);
 
-  getFullPath(
-    "./node_modules/@openzeppelin/contracts/token/ERC721/ERC721.sol",
-    "./IERC721.sol"
-  );
+  // console.log(
+  //   buildFullPath(
+  //     "./node_modules/@openzeppelin/contracts/token/ERC721/ERC721.sol",
+  //     "./extensions/IERC721Metadata.sol"
+  //   )
+  // );
+
   //   const solB = fs.readFileSync("./Base.sol", "utf8");
   //   const solA = fs.readFileSync("./Append.sol", "utf8");
   //   const solC = fs.readFileSync(
@@ -145,13 +163,13 @@ app.get("/", (req, res) => {
     },
   };
 
-  //   const output = solc.compile(JSON.stringify(input));
-  //   const contract = JSON.parse(output);
-  //   console.log(contract);
-  //   //   const bytecode = output.contracts["Token"].bytecode;
-  //   //   const abi = JSON.parse(output.contracts["Token"].interface);
+  const output = solc.compile(JSON.stringify(input));
+  const contract = JSON.parse(output);
+  console.log(contract);
+  //   const bytecode = output.contracts["Token"].bytecode;
+  //   const abi = JSON.parse(output.contracts["Token"].interface);
 
-  //   res.send(contract);
+  res.send(contract);
 });
 
 // Deploys basic 0xcert/ERC721 contract to NETWORK
