@@ -1,6 +1,7 @@
 const express = require("express");
+const fs = require("fs");
+
 const Web3 = require("web3");
-const getRevertReason = require("eth-revert-reason");
 const {
   PORT,
   NETWORK,
@@ -9,7 +10,6 @@ const {
   CONTRACT_ADDRESS,
   ADDRESS,
 } = require("./config.js");
-
 const { instantiateContract } = require("./utils.js");
 
 // Start express app
@@ -21,14 +21,14 @@ const web3 = new Web3(
     `https://${NETWORK}.infura.io/v3/${INFURA_KEY}`
   )
 );
+// Enables revert reason check
 web3.eth.handleRevert = true;
-const LATEST_TOKEN_ID = 123;
 
-const deployContract = () => {
+const deployContract = (baseContractAddress) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
-  const metadata = instantiateContract("./Base.sol");
+  const metadata = instantiateContract(baseContractAddress);
   // Create and deploy contract object
   const Instance = new web3.eth.Contract(metadata.abi);
   Instance.options.data = metadata.bytecode;
@@ -51,16 +51,46 @@ const deployContract = () => {
 
 app.get("/", (req, res) => {});
 
-// Deploys basic 0xcert/ERC721 contract to NETWORK
-app.get("/deploy", (req, res) => {
-  deployContract()
-    .then((address) => {
-      res.send({ contractAddress: address });
-    })
-    .catch((err) => {
-      console.log("err", err);
-      res.send({ err: err });
+// Deploys basic OpenZeppelin/ERC721 contract to NETWORK
+// req.query.name: contract name
+// req.query.symbol: symbol for contract, default first three characters of name
+app.get("/deploy", (req, res, next) => {
+  let { name, symbol } = req.query;
+
+  if (!name || name.length < 3) {
+    const err = new Error(
+      'Required query param "name" missing or shorter than 3 characters'
+    );
+    err.status = 500;
+    next(err);
+  }
+
+  // Use first three letter as symbol
+  if (!symbol) {
+    symbol = name.substring(0, 3).toUpperCase();
+  }
+
+  fs.copyFileSync("./Base.sol", "./Temp.sol");
+  fs.readFile("./Temp.sol", "utf8", function (err, data) {
+    if (err) throw err;
+
+    var result = data.replace(/Base/g, name);
+    result = result.replace(/BAS/g, symbol);
+    fs.writeFile("./Temp.sol", result, "utf8", function (error) {
+      if (error) {
+        res.send({ error: error });
+      }
+
+      deployContract("./Temp.sol")
+        .then((address) => {
+          res.send({ contractAddress: address });
+        })
+        .catch((err) => {
+          console.log("err", err);
+          res.send({ err: err });
+        });
     });
+  });
 });
 
 // creates a token
@@ -110,7 +140,8 @@ app.get("/mint", async (req, res, next) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
-  const metadata = instantiateContract("./Base.sol");
+  const metadata = instantiateContract("./Temp.sol");
+
   const contract = new web3.eth.Contract(metadata.abi, contractAddress);
   try {
     await contract.methods

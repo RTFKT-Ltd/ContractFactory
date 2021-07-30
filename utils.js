@@ -68,8 +68,9 @@ const instantiateContract = (baseContractPath) => {
   const output = solc.compile(JSON.stringify(input));
   const contract = JSON.parse(output);
   const bytecode =
-    "0x" + contract.contracts[baseContractPath]["Base"].evm.bytecode.object;
-  const abi = contract.contracts[baseContractPath]["Base"].abi;
+    "0x" +
+    contract.contracts[baseContractPath]["BasicContract"].evm.bytecode.object;
+  const abi = contract.contracts[baseContractPath]["BasicContract"].abi;
   return {
     bytecode: bytecode,
     abi: abi,
