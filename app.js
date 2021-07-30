@@ -24,6 +24,9 @@ const web3 = new Web3(
 // Enables revert reason check
 web3.eth.handleRevert = true;
 
+// Deploys contract using web3
+// param
+// baseContractAddress: path of the contract to deploy
 const deployContract = (baseContractAddress) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
@@ -49,11 +52,14 @@ const deployContract = (baseContractAddress) => {
     });
 };
 
-app.get("/", (req, res) => {});
+app.get("/", (req, res) => {
+  res.send("Welcome to Contract Factory");
+});
 
 // Deploys basic OpenZeppelin/ERC721 contract to NETWORK
-// req.query.name: contract name
-// req.query.symbol: symbol for contract, default first three characters of name
+// params
+// name: contract name
+// symbol: symbol for contract, default to first three characters of name
 app.get("/deploy", (req, res, next) => {
   let { name, symbol } = req.query;
 
@@ -93,31 +99,11 @@ app.get("/deploy", (req, res, next) => {
   });
 });
 
-// creates a token
-app.get("/balanceOf", (req, res) => {
-  const contractAddress = req.query.contractAddress
-    ? req.query.contractAddress
-    : CONTRACT_ADDRESS;
-  const accountAddress = req.query.accountAddress
-    ? req.query.accountAddress
-    : ADDRESS;
-
-  const contract = new web3.eth.Contract(abi, contractAddress, {
-    from: ADDRESS,
-  });
-  contract.options.address = contractAddress;
-
-  contract.methods
-    .balanceOf(accountAddress)
-    .call({ from: accountAddress })
-    .then((result) => res.send(result))
-    .catch((err) => res.send(err));
-});
-
-app.get("/getTransactionCount", (req, res) => {
-  web3.eth.getTransactionCount(ADDRESS).then((num) => res.send({ num: num }));
-});
-
+// Mints a new token
+// params
+// to: The address that will own the minted NFT.
+// tokenId: token ID of the NFT to be minted
+// contractAddress: address of contract to use
 app.get("/mint", async (req, res, next) => {
   if (!req.query.to) {
     const err = new Error('Required query param "to" missing');
