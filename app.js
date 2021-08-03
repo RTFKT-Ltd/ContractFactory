@@ -27,7 +27,7 @@ web3.eth.handleRevert = true;
 // Deploys contract using web3
 // param
 // baseContractAddress: path of the contract to deploy
-const deployContract = (baseContractAddress) => {
+const deployContract = (baseContractAddress, symbol, name) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
@@ -35,7 +35,7 @@ const deployContract = (baseContractAddress) => {
   // Create and deploy contract object
   const Instance = new web3.eth.Contract(metadata.abi);
   Instance.options.data = metadata.bytecode;
-  const deployTx = Instance.deploy();
+  const deployTx = Instance.deploy({ arguments: [name, symbol] });
 
   // NEED TO RETURN so that a promise can be returned to caller
   return deployTx
@@ -76,27 +76,14 @@ app.get("/deploy", (req, res, next) => {
     symbol = name.substring(0, 3).toUpperCase();
   }
 
-  fs.copyFileSync("./Base.sol", "./Temp.sol");
-  fs.readFile("./Temp.sol", "utf8", function (err, data) {
-    if (err) throw err;
-
-    var result = data.replace(/Base/g, name);
-    result = result.replace(/BAS/g, symbol);
-    fs.writeFile("./Temp.sol", result, "utf8", function (error) {
-      if (error) {
-        res.send({ error: error });
-      }
-
-      deployContract("./Temp.sol")
-        .then((address) => {
-          res.send({ contractAddress: address });
-        })
-        .catch((err) => {
-          console.log("err", err);
-          res.send({ err: err });
-        });
+  deployContract("./Base.sol", symbol, name)
+    .then((address) => {
+      res.send({ contractAddress: address });
+    })
+    .catch((err) => {
+      console.log("err", err);
+      res.send({ err: err });
     });
-  });
 });
 
 // Mints a new token
