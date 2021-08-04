@@ -50,6 +50,7 @@ const buildFullPath = (parent, path) => {
 };
 
 const instantiateContract = (baseContractPath) => {
+  console.log("In instantiate");
   const sources = {};
   compileImports(baseContractPath, sources);
 

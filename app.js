@@ -1,15 +1,6 @@
 const express = require("express");
-const fs = require("fs");
-
 const Web3 = require("web3");
-const {
-  PORT,
-  NETWORK,
-  KEY,
-  INFURA_KEY,
-  CONTRACT_ADDRESS,
-  ADDRESS,
-} = require("./config.js");
+const { PORT, NETWORK, KEY, INFURA_KEY } = require("./config.js");
 const { instantiateContract } = require("./utils.js");
 
 // Start express app
@@ -27,11 +18,11 @@ web3.eth.handleRevert = true;
 // Deploys contract using web3
 // param
 // baseContractAddress: path of the contract to deploy
-const deployContract = (baseContractAddress, symbol, name) => {
+const deployContract = (baseContractPath, symbol, name) => {
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
-  const metadata = instantiateContract(baseContractAddress);
+  const metadata = instantiateContract(baseContractPath);
   // Create and deploy contract object
   const Instance = new web3.eth.Contract(metadata.abi);
   Instance.options.data = metadata.bytecode;
@@ -68,7 +59,7 @@ app.get("/deploy", (req, res, next) => {
       'Required query param "name" missing or shorter than 3 characters'
     );
     err.status = 500;
-    next(err);
+    return next(err);
   }
 
   // Use first three letter as symbol
@@ -92,28 +83,19 @@ app.get("/deploy", (req, res, next) => {
 // tokenId: token ID of the NFT to be minted
 // contractAddress: address of contract to use
 app.get("/mint", async (req, res, next) => {
-  if (!req.query.to) {
-    const err = new Error('Required query param "to" missing');
-    err.status = 400;
-    next(err);
-  }
-  if (!req.query.tokenId) {
-    const err = new Error('Required query param "tokenId" missing');
-    err.status = 400;
-    next(err);
-  }
-  if (!req.query.contractAddress) {
-    const err = new Error('Required query param "contractAddress" missing');
-    err.status = 400;
-    next(err);
-  }
+  let { to, tokenId, contractAddress } = req.query;
 
-  const { to, tokenId, contractAddress } = req.query;
+  if (!tokenId || !contractAddress || !to) {
+    const err = new Error("Required query param missing");
+    err.status = 500;
+    return next(err);
+  }
+  console.log("In here");
 
   const signer = web3.eth.accounts.privateKeyToAccount(KEY);
   web3.eth.accounts.wallet.add(signer);
 
-  const metadata = instantiateContract("./Temp.sol");
+  const metadata = instantiateContract("./Base.sol");
 
   const contract = new web3.eth.Contract(metadata.abi, contractAddress);
   try {
