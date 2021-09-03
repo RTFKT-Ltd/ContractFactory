@@ -1,40 +1,39 @@
 const express = require("express");
-const Web3 = require("web3");
-const { PORT, NETWORK, KEY, INFURA_KEY } = require("./config.js");
+const cookieParser = require("cookie-parser");
+const session = require("express-session");
+const { PORT, KEY } = require("./config.js");
 const { instantiateContract } = require("./utils.js");
+const { web3, signer } = require("./web3Provider");
 
 // Start express app
 const app = express();
+var sess = { secret: "Shh, its a secret!" };
 
-// Connect to local Ethereum node
-const web3 = new Web3(
-  new Web3.providers.HttpProvider(
-    `https://${NETWORK}.infura.io/v3/${INFURA_KEY}`
-  )
-);
-// Enables revert reason check
-web3.eth.handleRevert = true;
+app.use(cookieParser());
+app.use(session(sess));
 
 // Deploys contract using web3
 // param
 // baseContractAddress: path of the contract to deploy
-const deployContract = (baseContractPath, symbol, name) => {
-  const signer = web3.eth.accounts.privateKeyToAccount(KEY);
-  web3.eth.accounts.wallet.add(signer);
+const deployContract = (baseContractPath, contractName, symbol, name) => {
+  const metadata = instantiateContract(baseContractPath, contractName);
+  sess.contractABI = metadata.abi;
 
-  const metadata = instantiateContract(baseContractPath);
   // Create and deploy contract object
   const Instance = new web3.eth.Contract(metadata.abi);
+
   Instance.options.data = metadata.bytecode;
-  const deployTx = Instance.deploy({ arguments: [name, symbol] });
 
   // NEED TO RETURN so that a promise can be returned to caller
-  return deployTx
+  return Instance.deploy({
+    arguments: [name, symbol],
+  })
     .send({
       from: signer.address,
       gas: 14237245,
     })
     .then((newContractInstance) => {
+      sess.contractAddress = newContractInstance.options.address;
       return newContractInstance.options.address;
     })
     .catch((err) => {
@@ -44,7 +43,11 @@ const deployContract = (baseContractPath, symbol, name) => {
 };
 
 app.get("/", (req, res) => {
-  res.send("Welcome to Contract Factory");
+  if (!sess.contractAddress) {
+    res.send("Welcome to RTFKT's Contract Factory");
+  } else {
+    res.send({ contractAddress: sess.contractAddress });
+  }
 });
 
 // Deploys basic OpenZeppelin/ERC721 contract to NETWORK
@@ -56,7 +59,7 @@ app.get("/deploy", (req, res, next) => {
 
   if (!name || name.length < 3) {
     const err = new Error(
-      'Required query param "name" missing or shorter than 3 characters'
+      'Required query param "name" (contract name) missing or shorter than 3 characters'
     );
     err.status = 500;
     return next(err);
@@ -67,7 +70,7 @@ app.get("/deploy", (req, res, next) => {
     symbol = name.substring(0, 3).toUpperCase();
   }
 
-  deployContract("./Base.sol", symbol, name)
+  deployContract("./lootboxExpress.sol", "MintableNFT", symbol, name)
     .then((address) => {
       res.send({ contractAddress: address });
     })
@@ -77,32 +80,15 @@ app.get("/deploy", (req, res, next) => {
     });
 });
 
-// Mints a new token
-// params
-// to: The address that will own the minted NFT.
-// tokenId: token ID of the NFT to be minted
-// contractAddress: address of contract to use
-app.get("/mint", async (req, res, next) => {
-  let { to, tokenId, contractAddress } = req.query;
-
-  if (!tokenId || !contractAddress || !to) {
-    const err = new Error("Required query param missing");
-    err.status = 500;
-    return next(err);
-  }
-  console.log("In here");
-
-  const signer = web3.eth.accounts.privateKeyToAccount(KEY);
-  web3.eth.accounts.wallet.add(signer);
-
-  const metadata = instantiateContract("./Base.sol");
-
-  const contract = new web3.eth.Contract(metadata.abi, contractAddress);
+app.get("/acquireLootbox", (req, res, next) => {
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
   try {
-    await contract.methods
-      .mint(to, tokenId)
-      // needed to use signer instead of string "0x...", otherwise, result in Error: The method eth_sendTransaction does not exist/is not available
-      .send({ from: signer.address, gas: 14237245 })
+    contract.methods
+      .acquireLootbox()
+      .send({ from: signer.address, gas: 2100000 })
       .on("transactionHash", function (hash) {
         console.log("tx hash", hash);
       })
@@ -112,10 +98,153 @@ app.get("/mint", async (req, res, next) => {
       .on("confirmation", function (confirmationNumber) {
         console.log("confirmation", confirmationNumber);
       })
-      .then((receipt) => res.send(receipt));
+      .then((id) => res.send({ id: id }));
   } catch (e) {
     console.log(e);
-    res.send({ error: e.reason });
+  }
+});
+
+app.get("/openLootbox", (req, res, next) => {
+  let { tokenId } = req.query;
+
+  if (!tokenId) {
+    const err = new Error("Required TokenID missing");
+    err.status = 500;
+    return next(err);
+  }
+
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
+  try {
+    contract.methods
+      .openLootbox(tokenId)
+      .send({ from: signer.address, gas: 2100000 })
+      .on("transactionHash", function (hash) {
+        console.log("tx hash", hash);
+      })
+      .on("receipt", function (receipt) {
+        console.log("receipt", receipt);
+      })
+      .on("confirmation", function (confirmationNumber) {
+        console.log("confirmation", confirmationNumber);
+      })
+      .then((receipt) => res.send({ receipt: receipt }));
+  } catch (e) {
+    console.log(e);
+  }
+});
+
+app.get("/stateOfLoot", (req, res, next) => {
+  let { tokenId } = req.query;
+
+  if (!tokenId) {
+    const err = new Error("Required TokenID missing");
+    err.status = 500;
+    return next(err);
+  }
+
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
+  try {
+    contract.methods
+      .stateOfLoot(tokenId)
+      .send({ from: signer.address, gas: 2100000 })
+      .on("transactionHash", function (hash) {
+        console.log("tx hash", hash);
+      })
+      .on("receipt", function (receipt) {
+        console.log("receipt", receipt);
+      })
+      .on("confirmation", function (confirmationNumber) {
+        console.log("confirmation", confirmationNumber);
+      })
+      .then((receipt) => res.send({ receipt: receipt }));
+  } catch (e) {
+    console.log(e);
+  }
+});
+
+app.get("/seeLimit", (req, res, next) => {
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
+  try {
+    contract.methods
+      .seeLimit()
+      .send({ from: signer.address, gas: 2100000 })
+      .on("transactionHash", function (hash) {
+        console.log("tx hash", hash);
+      })
+      .on("receipt", function (receipt) {
+        console.log("receipt", receipt);
+      })
+      .on("confirmation", function (confirmationNumber) {
+        console.log("confirmation", confirmationNumber);
+      })
+      .then((receipt) => res.send({ receipt: receipt }));
+  } catch (e) {
+    console.log(e);
+  }
+});
+
+app.get("/increaseLimit", (req, res, next) => {
+  let { amount } = req.query;
+
+  if (!amount) {
+    const err = new Error("Required Amount param missing");
+    err.status = 500;
+    return next(err);
+  }
+
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
+  try {
+    contract.methods
+      .increaseLimit(amount)
+      .send({ from: signer.address, gas: 2100000 })
+      .on("transactionHash", function (hash) {
+        console.log("tx hash", hash);
+      })
+      .on("receipt", function (receipt) {
+        console.log("receipt", receipt);
+      })
+      .on("confirmation", function (confirmationNumber) {
+        console.log("confirmation", confirmationNumber);
+      })
+      .then((receipt) => res.send({ receipt: receipt }));
+  } catch (e) {
+    console.log(e);
+  }
+});
+
+app.get("/withdrawFunds", (req, res, next) => {
+  const contract = new web3.eth.Contract(
+    sess.contractABI,
+    sess.contractAddress
+  );
+  try {
+    contract.methods
+      .withdrawFunds()
+      .send({ from: signer.address, gas: 2100000 })
+      .on("transactionHash", function (hash) {
+        console.log("tx hash", hash);
+      })
+      .on("receipt", function (receipt) {
+        console.log("receipt", receipt);
+      })
+      .on("confirmation", function (confirmationNumber) {
+        console.log("confirmation", confirmationNumber);
+      })
+      .then((receipt) => res.send({ receipt: receipt }));
+  } catch (e) {
+    console.log(e);
   }
 });
 

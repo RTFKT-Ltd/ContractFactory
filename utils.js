@@ -49,7 +49,7 @@ const buildFullPath = (parent, path) => {
   return curDir + "/" + path;
 };
 
-const instantiateContract = (baseContractPath) => {
+const instantiateContract = (baseContractPath, contractName) => {
   console.log("In instantiate");
   const sources = {};
   compileImports(baseContractPath, sources);
@@ -69,8 +69,9 @@ const instantiateContract = (baseContractPath) => {
   const output = solc.compile(JSON.stringify(input));
   const contract = JSON.parse(output);
   const bytecode =
-    "0x" + contract.contracts[baseContractPath]["Base"].evm.bytecode.object;
-  const abi = contract.contracts[baseContractPath]["Base"].abi;
+    "0x" +
+    contract.contracts[baseContractPath][contractName].evm.bytecode.object;
+  const abi = contract.contracts[baseContractPath][contractName].abi;
   return {
     bytecode: bytecode,
     abi: abi,
