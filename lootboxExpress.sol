@@ -15,7 +15,7 @@ contract MintableNFT is ERC721URIStorage, Ownable {
     // stateOfLoot[tokenId] = #
 
     address payable ownerAddress = payable(0x4e5783F2e4CD4445dEf0EcEB7dC5Bd82F03eb382); // who is this owner
-    uint _hardLimit = 0;
+    uint _hardLimit = 1; // change from 0 to 1, bc line 35 fails upon first call 0>0
     uint _currentMinted = 0;
     uint price = 0.5 ether;
     uint _currentHold = 0 ether; //what is current hold? what is this unit of ether?

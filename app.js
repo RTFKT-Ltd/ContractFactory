@@ -81,6 +81,14 @@ app.get("/deploy", (req, res, next) => {
 });
 
 app.get("/acquireLootbox", (req, res, next) => {
+  // let { value } = req.query; // should be at least 500000000000000000 wei
+  // if (!value) {
+  //   const err = new Error("Required TokenID missing");
+  //   err.status = 500;
+  //   return next(err);
+  // }
+
+  const value = 500000000000000000;
   const contract = new web3.eth.Contract(
     sess.contractABI,
     sess.contractAddress
@@ -88,7 +96,7 @@ app.get("/acquireLootbox", (req, res, next) => {
   try {
     contract.methods
       .acquireLootbox()
-      .send({ from: signer.address, gas: 2100000 })
+      .send({ from: signer.address, gas: 2100000, value: value })
       .on("transactionHash", function (hash) {
         console.log("tx hash", hash);
       })
@@ -98,7 +106,9 @@ app.get("/acquireLootbox", (req, res, next) => {
       .on("confirmation", function (confirmationNumber) {
         console.log("confirmation", confirmationNumber);
       })
-      .then((id) => res.send({ id: id }));
+      .then((receipt) =>
+        res.send({ tokenId: receipt.events.Transfer.returnValues.tokenId })
+      );
   } catch (e) {
     console.log(e);
   }
@@ -106,7 +116,6 @@ app.get("/acquireLootbox", (req, res, next) => {
 
 app.get("/openLootbox", (req, res, next) => {
   let { tokenId } = req.query;
-
   if (!tokenId) {
     const err = new Error("Required TokenID missing");
     err.status = 500;
@@ -130,14 +139,22 @@ app.get("/openLootbox", (req, res, next) => {
       .on("confirmation", function (confirmationNumber) {
         console.log("confirmation", confirmationNumber);
       })
-      .then((receipt) => res.send({ receipt: receipt }));
+      .then((receipt) => {
+        const { _tokenURI, _generateNumber, _tokenId } =
+          receipt.events.LootboxOpened.returnValues;
+        res.send({
+          tokenURI: _tokenURI,
+          generateNumber: _generateNumber,
+          tokenId: _tokenId,
+        });
+      });
   } catch (e) {
     console.log(e);
   }
 });
 
 app.get("/stateOfLoot", (req, res, next) => {
-  let { tokenId } = req.query;
+  let { tokenId, contractAddress } = req.query;
 
   if (!tokenId) {
     const err = new Error("Required TokenID missing");
