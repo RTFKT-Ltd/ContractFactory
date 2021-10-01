@@ -1,5 +1,6 @@
 const fs = require("fs");
 const solc = require("solc");
+const { web3 } = require("./web3Provider");
 
 // returns sources: { "Contract.sol": { content: fs.readFileSync("pathName.sol",utf8)...}}
 // using recursion
@@ -49,7 +50,7 @@ const buildFullPath = (parent, path) => {
   return curDir + "/" + path;
 };
 
-const instantiateContract = (baseContractPath) => {
+const instantiateContract = (baseContractPath, contractName) => {
   console.log("In instantiate");
   const sources = {};
   compileImports(baseContractPath, sources);
@@ -69,14 +70,26 @@ const instantiateContract = (baseContractPath) => {
   const output = solc.compile(JSON.stringify(input));
   const contract = JSON.parse(output);
   const bytecode =
-    "0x" + contract.contracts[baseContractPath]["Base"].evm.bytecode.object;
-  const abi = contract.contracts[baseContractPath]["Base"].abi;
+    "0x" +
+    contract.contracts[baseContractPath][contractName].evm.bytecode.object;
+  const abi = contract.contracts[baseContractPath][contractName].abi;
   return {
     bytecode: bytecode,
     abi: abi,
   };
 };
 
+const { abi, bytecode } = instantiateContract(
+  "./lootboxExpress.sol",
+  "MintableNFT"
+);
+
+const contractInstance = new web3.eth.Contract(abi);
+contractInstance.options.data = bytecode;
+
 module.exports = {
   instantiateContract,
+  abi,
+  bytecode,
+  contractInstance,
 };
