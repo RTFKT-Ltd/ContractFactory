@@ -19,15 +19,17 @@ contract MintableNFT is ERC721URIStorage, Ownable {
     uint _currentMinted = 0;
     uint price = 0.5 ether;
     uint _currentHold = 0 ether; //what is current hold? what is this unit of ether?
+    string _tokenUri = "https://gateway.pinata.cloud/ipfs/QmPCpmaZzCjJyrZTFfK79JHzEFfesHjyscjTcYTM3epVGT/unopened.json";
+    uint _upperBound;
 
-    // variables to be customised in constructor
-    // string tokenURI;
-    // uint256 generatedNumberLimit;
-    // an object for metadata?
-    // % of sth...
+    constructor(string memory _tokenName, string memory _symbol, string memory _uri, uint _limit) ERC721(_tokenName, _symbol) {
+        if (bytes(_uri).length != 0) {
+          _tokenUri = _uri;
+        }
+        if (_limit > 0) {
+          _upperBound = _limit;
+        }
 
-    constructor(string memory _tokenName, string memory _symbol) ERC721("RTFKT Capsule : Space Drip", _symbol) {
-        // tokenURI = _tokenURI;
     }   
 
     function acquireLootbox() public payable returns (uint256) {
@@ -37,7 +39,7 @@ contract MintableNFT is ERC721URIStorage, Ownable {
 
         uint256 newItemId = _tokenIds.current();
         _mint(msg.sender, newItemId);
-        _setTokenURI(newItemId, "https://gateway.pinata.cloud/ipfs/QmPCpmaZzCjJyrZTFfK79JHzEFfesHjyscjTcYTM3epVGT/unopened.json"); // Initial unopened lootbox 
+        _setTokenURI(newItemId, _tokenUri); // Initial unopened lootbox 
 
         _stateOfLoot[newItemId] = 0;
         _currentHold = msg.value + _currentHold;
@@ -101,6 +103,10 @@ contract MintableNFT is ERC721URIStorage, Ownable {
         return _hardLimit;
     }
 
+    function seeBound() external view returns(uint) { 
+        return _upperBound;
+    }
+
     function increaseLimit(uint _amount) external { 
         require(msg.sender == ownerAddress, "Unauthorized call");
         _hardLimit = _hardLimit + _amount;
@@ -110,5 +116,9 @@ contract MintableNFT is ERC721URIStorage, Ownable {
         require(msg.sender == ownerAddress, "Unauthorized call");
         ownerAddress.transfer(_currentHold);
         _currentHold = 0 ether;
+    }
+
+    function tokenUri(uint _tokenId) external view returns(string memory) { 
+        return tokenURI(_tokenId);
     }
 }

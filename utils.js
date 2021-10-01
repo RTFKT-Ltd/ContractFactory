@@ -1,5 +1,6 @@
 const fs = require("fs");
 const solc = require("solc");
+const { web3 } = require("./web3Provider");
 
 // returns sources: { "Contract.sol": { content: fs.readFileSync("pathName.sol",utf8)...}}
 // using recursion
@@ -78,6 +79,17 @@ const instantiateContract = (baseContractPath, contractName) => {
   };
 };
 
+const { abi, bytecode } = instantiateContract(
+  "./lootboxExpress.sol",
+  "MintableNFT"
+);
+
+const contractInstance = new web3.eth.Contract(abi);
+contractInstance.options.data = bytecode;
+
 module.exports = {
   instantiateContract,
+  abi,
+  bytecode,
+  contractInstance,
 };
