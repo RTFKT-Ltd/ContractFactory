@@ -5,7 +5,7 @@
   "license": "MIT",
   "dependencies": {
     "@0xcert/ethereum-erc721": "2.0.0",
-    "@openzeppelin/contracts": "^4.2.0",
+    "@openzeppelin/contracts": "^4.9.3",
     "cookie-parser": "^1.4.5",
     "eth-revert-reason": "^1.0.3",
     "express": "^4.17.1",
